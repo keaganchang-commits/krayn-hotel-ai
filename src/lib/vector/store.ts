@@ -272,16 +272,30 @@ export class KnowledgeVectorStore {
       await this.init();
       try {
         rawItems = await this.index.listItems();
-        this.cachedItems = rawItems;
-        this.lastCacheTime = now;
       } catch (err) {
         console.warn('[KnowledgeVectorStore] listItems encountered read error, attempting auto-heal...', err);
         ensureCleanIndexFile();
         this.index = new LocalIndex(INDEX_DIR);
         rawItems = await this.index.listItems().catch(() => []);
-        this.cachedItems = rawItems;
-        this.lastCacheTime = now;
       }
+
+      // If Vectra returned empty, fall back directly to reading INDEX_FILE JSON
+      if (!rawItems || rawItems.length === 0) {
+        try {
+          if (fs.existsSync(INDEX_FILE)) {
+            const rawContent = fs.readFileSync(INDEX_FILE, 'utf8');
+            const parsed = JSON.parse(rawContent);
+            if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
+              rawItems = parsed.items;
+            }
+          }
+        } catch (directErr) {
+          console.warn('[KnowledgeVectorStore] Direct JSON read fallback error:', directErr);
+        }
+      }
+
+      this.cachedItems = rawItems;
+      this.lastCacheTime = now;
     }
     
     let result = (rawItems || []).filter(Boolean).map(item => ({
