@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "calendarId": "primary",
+  "outletName": "Merdeka Grill - All Day Dining",
+  "totalCapacity": 100,
+  "defaultPartySize": 2,
+  "turnDurationMinutes": 90,
+  "serviceDays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "openingTime": "07:00",
+  "closingTime": "23:00",
+  "maxCoversPerSlot": 20,
+  "serviceAccountKeyPath": "service-account.json",
+  "autoBookConfidenceThreshold": 85
+}

@@ -1,0 +1,50 @@
+{
+  "name": "krayn-prototype",
+  "version": "1.0.0",
+  "description": "",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "app": "cross-env NODE_ENV=development electron .",
+    "app:prod": "npm run build && cross-env NODE_ENV=production electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^2.27.0",
+    "clsx": "^2.1.1",
+    "edge-tts-universal": "^1.4.0",
+    "framer-motion": "^14.0.0",
+    "googleapis": "^186.0.0",
+    "lucide-react": "^1.52.0",
+    "next": "^16.3.8",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pdf-ts": "^0.0.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "^3.7.0",
+    "twilio": "^6.2.0",
+    "vectra": "^0.15.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.1",
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^44.7.0",
+    "electron-is-dev": "^3.0.1",
+    "postcss": "^8.5.29",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "wait-on": "^9.5.1"
+  }
+}

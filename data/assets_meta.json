@@ -1,0 +1,42 @@
+[
+  {
+    "id": "asset_1792041902844_v8v87",
+    "name": "Merdeka-Grill-Dinner-Menu.pdf",
+    "filename": "asset_1792041902844_v8v87.pdf",
+    "mimeType": "application/pdf",
+    "size": 31653817,
+    "uploadedAt": "2026-10-15T05:25:02.898Z",
+    "description": "Restaurant Dinner Menu",
+    "purpose": "Displays the dinner food and beverage offerings, including descriptions and pricing, for guests dining at Merdeka Grill.",
+    "whenToShare": "Attach when a customer inquires about dinner options, food menus, evening dining choices, or meal pricing specifically for Merdeka Grill.",
+    "relevantTopics": [
+      "dining",
+      "menu",
+      "dinner",
+      "food",
+      "prices",
+      "Merdeka Grill"
+    ],
+    "extractedFactsCount": 163
+  },
+  {
+    "id": "asset_1792041893398_legyd",
+    "name": "Park-Lounge-All-Day-Menu.pdf",
+    "filename": "asset_1792041893398_legyd.pdf",
+    "mimeType": "application/pdf",
+    "size": 23669594,
+    "uploadedAt": "2026-10-15T05:24:53.430Z",
+    "description": "Park Lounge All-Day, Drinks, and Afternoon Tea Menu",
+    "purpose": "Provides guests with a comprehensive list of all-day food offerings, beverage selections, and specialized afternoon tea options available at the Park Lounge.",
+    "whenToShare": "Attach when a customer inquires about the Park Lounge menu, requests a drinks list, asks for afternoon tea availability or pricing, or seeks general all-day dining options within the lounge.",
+    "relevantTopics": [
+      "Park Lounge",
+      "menu",
+      "drinks",
+      "afternoon tea",
+      "dining",
+      "beverages"
+    ],
+    "extractedFactsCount": 265
+  }
+]

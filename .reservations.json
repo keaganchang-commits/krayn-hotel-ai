@@ -1,0 +1,16 @@
+[
+  {
+    "eventId": "local_evt_1792047448876",
+    "guestName": "Keagan Chang",
+    "partySize": 2,
+    "startTime": "2026-10-15T10:00:00.000Z",
+    "endTime": "2026-10-15T11:30:00.000Z",
+    "restaurantName": "Merdeka Grill",
+    "status": "confirmed",
+    "createdAt": "2026-10-15T06:57:28.876Z",
+    "syncPendingGoogleCalendar": false,
+    "googleCalendarError": "Request had insufficient authentication scopes.",
+    "googleCalendarEventId": "abjr4qp6os6barsq9ltctmne1k",
+    "googleCalendarLink": "https://www.google.com/calendar/event?eid=YWJqcjRxcDZvczZiYXJzcTlsdGN0bW5lMWsgbWFwbGVob3RlbDBAbQ"
+  }
+]

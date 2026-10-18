@@ -1,0 +1,31 @@
+{
+  "scenarios": [
+    {
+      "id": "meeting_room_journey",
+      "name": "Executive Meeting Room Booking Journey",
+      "turns": [
+        {
+          "step": 1,
+          "name": "Meeting Room Inquiry",
+          "matchSubjectKeywords": ["meeting room booking", "meeting room", "meeting rooms", "enquire about the meeting rooms"],
+          "matchBodyKeywords": ["enquire about the meeting rooms", "more details", "details"],
+          "replySubject": "Re: Meeting Room Booking - Park Hyatt KL",
+          "replyBody": "Dear Keagan Chang,\n\nThank you for contacting Park Hyatt Kuala Lumpur regarding your upcoming meeting.\n\nWe offer two distinct venues suitable for your meeting:\n\n1. Executive Salons (Level 98):\n• Seats 6-18 people.\n• Features 4K UHD presentation screens, integrated wireless video conferencing, and in-room complimentary coffee & tea.\n\n2. Level 114 Sky Rooms (Level 114):\n• Seats 18 - 80 people.\n• Panoramic skyline view from the highest event floor in Kuala Lumpur.\n• Flexible configurations (Boardroom, U-Shape, Classroom, Theater).\n\nTo finalise your booking, could you kindly confirm:\n• Date & Time\n• Number of People\n• Room Configuration\n\nThank you. We look forward to your response\n\nWarm regards,\nPark Hyatt Kuala Lumpur"
+        },
+        {
+          "step": 2,
+          "name": "Booking Confirmation & Agreement",
+          "matchSubjectKeywords": ["meeting room booking", "meeting room", "re:"],
+          "matchBodyKeywords": ["30 october 2026", "22 people", "u-shape", "u-shape arrangement"],
+          "replySubject": "Re: Meeting Room Booking - Park Hyatt KL",
+          "triggerCalendarBooking": true,
+          "attachPdfAgreement": true,
+          "calendarEventSummary": "💼 [Meeting Room] Sky Rooms (Level 114) - Keagan Chang (22 pax)",
+          "calendarDateStr": "2026-10-22T10:00:00+08:00",
+          "calendarDurationHours": 2,
+          "replyBody": "Dear Keagan Chang,\n\nThank you for providing the details.\n\nWe are delighted to confirm your meeting room reservation at Park Hyatt Kuala Lumpur. Given your party size of 22 guests, we have reserved our panoramic Sky Room on Level 114, configured in a U-Shape arrangement.\n\nReservation Summary:\n• Venue: Sky Rooms (Level 114)\n• Date: Thursday, 22 October 2026\n• Time: 10:00 AM – 12:00 PM\n• Attendees: 22 Guests\n• Room Setup: U-Shape Arrangement\n• Facilities: Dual 4K Laser Displays, Wireless Video Conferencing, Complimentary Coffee & Tea Station\n• Agreement Reference: PKH-MTG-221026\n\nPlease find attached your Reservation Agreement (PDF). Kindly review, sign, and return a copy to us at your convenience to confirm your booking.\n\nWe look forward to welcoming you and your team to Park Hyatt Kuala Lumpur!"
+        }
+      ]
+    }
+  ]
+}
