@@ -30,33 +30,26 @@ function ensureCleanIndexFile() {
 
     const raw = fs.readFileSync(INDEX_FILE, 'utf8');
     if (raw && raw.trim().length > 0) {
-      JSON.parse(raw);
+      try {
+        JSON.parse(raw);
+      } catch {
+        // Try truncating to last valid JSON closing bracket if corrupted
+        let pos = raw.lastIndexOf('}]}');
+        while (pos !== -1) {
+          try {
+            const candidate = raw.slice(0, pos + 3);
+            JSON.parse(candidate);
+            fs.writeFileSync(INDEX_FILE, candidate, 'utf8');
+            console.log('[KnowledgeVectorStore] Successfully auto-healed index.json');
+            return;
+          } catch {
+            pos = raw.lastIndexOf('}]}', pos - 1);
+          }
+        }
+      }
     }
   } catch (err: any) {
     console.warn('[KnowledgeVectorStore] ensureCleanIndexFile warning:', err?.message || err);
-  }
-}
-
-    // 2. Try truncating to last valid JSON closing bracket
-    try {
-      const raw = fs.readFileSync(INDEX_FILE, 'utf8');
-      let pos = raw.lastIndexOf('}]}');
-      while (pos !== -1) {
-        try {
-          const candidate = raw.slice(0, pos + 3);
-          JSON.parse(candidate);
-          fs.writeFileSync(INDEX_FILE, candidate, 'utf8');
-          console.log('[KnowledgeVectorStore] Successfully auto-healed index.json');
-          return;
-        } catch {
-          pos = raw.lastIndexOf('}]}', pos - 1);
-        }
-      }
-    } catch {}
-
-    // 3. Fallback: reset to clean state if completely unrecoverable
-    const emptyIndex = JSON.stringify({ version: 1, metadata_config: { indexed: [] }, items: [] });
-    fs.writeFileSync(INDEX_FILE, emptyIndex, 'utf8');
   }
 }
 
