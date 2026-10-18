@@ -8,8 +8,10 @@ export async function GET(request: Request) {
     const source = searchParams.get('source') || 'all';
     const search = searchParams.get('search') || '';
 
-    const { deduplicateKnowledgeHub } = await import('@/lib/knowledge/deduplicator');
-    await deduplicateKnowledgeHub().catch(e => console.warn('Deduplication on fetch error:', e));
+    // Run deduplication asynchronously in background without blocking instant read response
+    import('@/lib/knowledge/deduplicator')
+      .then(m => m.deduplicateKnowledgeHub())
+      .catch(e => console.warn('Deduplication on fetch error:', e));
 
     let items = await vectorStore.listItems(source, search);
 

@@ -9,55 +9,33 @@ const INDEX_FILE = path.join(INDEX_DIR, 'index.json');
 
 // Ensure a safe index file exists on disk with atomic backup
 function ensureCleanIndexFile() {
-  if (!fs.existsSync(INDEX_DIR)) {
-    fs.mkdirSync(INDEX_DIR, { recursive: true });
-  }
-  const BAK_FILE = path.join(INDEX_DIR, 'index.json.bak');
-  if (!fs.existsSync(INDEX_FILE)) {
-    if (fs.existsSync(BAK_FILE)) {
-      try {
-        const bakRaw = fs.readFileSync(BAK_FILE, 'utf8');
-        JSON.parse(bakRaw);
-        fs.writeFileSync(INDEX_FILE, bakRaw, 'utf8');
-        return;
-      } catch {}
-    }
-    const emptyIndex = JSON.stringify({ version: 1, metadata_config: { indexed: [] }, items: [] });
-    fs.writeFileSync(INDEX_FILE, emptyIndex, 'utf8');
-    return;
-  }
-
   try {
+    if (!fs.existsSync(INDEX_DIR)) {
+      fs.mkdirSync(INDEX_DIR, { recursive: true });
+    }
+    const BAK_FILE = path.join(INDEX_DIR, 'index.json.bak');
+    if (!fs.existsSync(INDEX_FILE)) {
+      if (fs.existsSync(BAK_FILE)) {
+        try {
+          const bakRaw = fs.readFileSync(BAK_FILE, 'utf8');
+          JSON.parse(bakRaw);
+          fs.writeFileSync(INDEX_FILE, bakRaw, 'utf8');
+          return;
+        } catch {}
+      }
+      const emptyIndex = JSON.stringify({ version: 1, metadata_config: { indexed: [] }, items: [] });
+      fs.writeFileSync(INDEX_FILE, emptyIndex, 'utf8');
+      return;
+    }
+
     const raw = fs.readFileSync(INDEX_FILE, 'utf8');
     if (raw && raw.trim().length > 0) {
       JSON.parse(raw);
-      // Periodically update verified backup using atomic write
-      if (Math.random() < 0.05) {
-        const tempBak = `${BAK_FILE}.tmp`;
-        fs.writeFileSync(tempBak, raw, 'utf8');
-        fs.renameSync(tempBak, BAK_FILE);
-      }
     }
   } catch (err: any) {
-    console.warn('[KnowledgeVectorStore] Corrupted or incomplete index.json detected, auto-healing...', err?.message || err);
-    // If Vectra is mid-write, wait and try once more before recovering
-    try {
-      const retryRaw = fs.readFileSync(INDEX_FILE, 'utf8');
-      if (retryRaw && retryRaw.trim().length > 0) {
-        JSON.parse(retryRaw);
-        return;
-      }
-    } catch {}
-
-    // 1. Try restoring from verified backup
-    if (fs.existsSync(BAK_FILE)) {
-      try {
-        const bakContent = fs.readFileSync(BAK_FILE, 'utf8');
-        JSON.parse(bakContent);
-        fs.writeFileSync(INDEX_FILE, bakContent, 'utf8');
-        return;
-      } catch {}
-    }
+    console.warn('[KnowledgeVectorStore] ensureCleanIndexFile warning:', err?.message || err);
+  }
+}
 
     // 2. Try truncating to last valid JSON closing bracket
     try {
