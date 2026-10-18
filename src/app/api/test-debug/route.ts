@@ -27,6 +27,16 @@ export async function GET() {
       }
     }
 
+    let vectorItemsResult: any = null;
+    let vectorError: any = null;
+    try {
+      const { vectorStore } = await import('@/lib/vector/store');
+      const res = await vectorStore.listItems();
+      vectorItemsResult = { length: res.length, firstTitle: res[0]?.title };
+    } catch (vErr: any) {
+      vectorError = { message: vErr?.message, stack: vErr?.stack };
+    }
+
     return NextResponse.json({
       status: 'ok',
       cwd,
@@ -35,6 +45,8 @@ export async function GET() {
       files,
       indexFileSize,
       itemsCount,
+      vectorItemsResult,
+      vectorError,
     });
   } catch (err: any) {
     return NextResponse.json({
