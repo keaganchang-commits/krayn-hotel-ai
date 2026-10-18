@@ -28,11 +28,16 @@ export async function GET(request: Request) {
       success: true,
       count: items.length,
       items,
+      _debug: {
+        cwd: process.cwd(),
+        hasStoreDir: require('fs').existsSync(require('path').join(process.cwd(), '.knowledge_store')),
+        hasStoreIndex: require('fs').existsSync(require('path').join(process.cwd(), '.knowledge_store', 'index.json')),
+      }
     });
   } catch (error: any) {
     console.error('Knowledge GET error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch knowledge items' },
+      { success: false, error: error.message || 'Failed to fetch knowledge items', stack: error.stack },
       { status: 500 }
     );
   }
