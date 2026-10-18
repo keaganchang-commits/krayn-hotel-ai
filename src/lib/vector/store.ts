@@ -54,7 +54,7 @@ function ensureCleanIndexFile() {
 }
 
 export class KnowledgeVectorStore {
-  private index: LocalIndex;
+  private index: LocalIndex | null = null;
   private isInitialized = false;
   private writeMutex: Promise<any> = Promise.resolve();
   private cachedItems: any[] | null = null;
@@ -62,7 +62,13 @@ export class KnowledgeVectorStore {
 
   constructor() {
     ensureCleanIndexFile();
-    this.index = new LocalIndex(INDEX_DIR);
+  }
+
+  private getIndex(): LocalIndex {
+    if (!this.index) {
+      this.index = new LocalIndex(INDEX_DIR);
+    }
+    return this.index;
   }
 
   private invalidateCache() {
@@ -88,15 +94,17 @@ export class KnowledgeVectorStore {
     }
     try {
       ensureCleanIndexFile();
-      if (!(await this.index.isIndexCreated())) {
-        await this.index.createIndex();
+      const idx = this.getIndex();
+      if (!(await idx.isIndexCreated())) {
+        await idx.createIndex();
       }
       this.isInitialized = true;
     } catch (err) {
       console.error('[KnowledgeVectorStore] Init error:', err);
       ensureCleanIndexFile();
       try {
-        await this.index.createIndex();
+        const idx = this.getIndex();
+        await idx.createIndex();
         this.isInitialized = true;
       } catch (e) {
         console.error('[KnowledgeVectorStore] Fatal index create error:', e);
@@ -140,14 +148,15 @@ export class KnowledgeVectorStore {
 
     // 2. Perform batch insertion within a single lock and single disk flush
     return await this.withLock(async () => {
-      await this.index.beginUpdate();
+      const idx = this.getIndex();
+      await idx.beginUpdate();
       try {
         for (const item of itemsToInsert) {
-          await this.index.insertItem(item);
+          await idx.insertItem(item);
         }
-        await this.index.endUpdate();
+        await idx.endUpdate();
       } catch (e) {
-        try { this.index.cancelUpdate(); } catch {}
+        try { idx.cancelUpdate(); } catch {}
         throw e;
       }
       return itemsToInsert.map(i => i.id);
@@ -170,12 +179,21 @@ export class KnowledgeVectorStore {
     };
     const queryNorm = calcNorm(queryVector);
 
-    // Get raw items with vectors from local index
+    // Get raw items with vectors from local index or direct disk file
     let rawItems: any[] = [];
     try {
-      rawItems = await this.index.listItems();
-    } catch {
-      rawItems = [];
+      if (fs.existsSync(INDEX_FILE)) {
+        const parsed = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'));
+        if (Array.isArray(parsed?.items)) rawItems = parsed.items;
+      }
+    } catch {}
+
+    if (rawItems.length === 0) {
+      try {
+        rawItems = await this.getIndex().listItems();
+      } catch {
+        rawItems = [];
+      }
     }
     const rawById = new Map<string, any>(rawItems.map(r => [r.id, r]));
 
@@ -269,28 +287,26 @@ export class KnowledgeVectorStore {
 
     // Use memory cache if available and younger than 10 seconds, avoiding 28MB JSON disk reads
     if (!rawItems || now - this.lastCacheTime > 10000) {
-      await this.init();
+      // 1. Direct fast read from INDEX_FILE JSON (zero dependency, 100% reliable in serverless)
       try {
-        rawItems = await this.index.listItems();
-      } catch (err) {
-        console.warn('[KnowledgeVectorStore] listItems encountered read error, attempting auto-heal...', err);
-        ensureCleanIndexFile();
-        this.index = new LocalIndex(INDEX_DIR);
-        rawItems = await this.index.listItems().catch(() => []);
+        if (fs.existsSync(INDEX_FILE)) {
+          const rawContent = fs.readFileSync(INDEX_FILE, 'utf8');
+          const parsed = JSON.parse(rawContent);
+          if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
+            rawItems = parsed.items;
+          }
+        }
+      } catch (directErr) {
+        console.warn('[KnowledgeVectorStore] Direct JSON read warning:', directErr);
       }
 
-      // If Vectra returned empty, fall back directly to reading INDEX_FILE JSON
+      // 2. If direct file read did not yield items, try Vectra index
       if (!rawItems || rawItems.length === 0) {
         try {
-          if (fs.existsSync(INDEX_FILE)) {
-            const rawContent = fs.readFileSync(INDEX_FILE, 'utf8');
-            const parsed = JSON.parse(rawContent);
-            if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
-              rawItems = parsed.items;
-            }
-          }
-        } catch (directErr) {
-          console.warn('[KnowledgeVectorStore] Direct JSON read fallback error:', directErr);
+          await this.init();
+          rawItems = await this.index.listItems();
+        } catch (err) {
+          console.warn('[KnowledgeVectorStore] Vectra listItems fallback error:', err);
         }
       }
 
@@ -332,7 +348,7 @@ export class KnowledgeVectorStore {
   async deleteItem(id: string): Promise<boolean> {
     await this.init();
     return await this.withLock(async () => {
-      await this.index.deleteItem(id);
+      await this.getIndex().deleteItem(id);
       this.cachedItems = null;
       return true;
     });
@@ -345,16 +361,17 @@ export class KnowledgeVectorStore {
     if (!ids || ids.length === 0) return true;
     await this.init();
     return await this.withLock(async () => {
-      await this.index.beginUpdate();
+      const idx = this.getIndex();
+      await idx.beginUpdate();
       try {
         for (const id of ids) {
           try {
-            await this.index.deleteItem(id);
+            await idx.deleteItem(id);
           } catch {}
         }
-        await this.index.endUpdate();
+        await idx.endUpdate();
       } catch (e) {
-        try { this.index.cancelUpdate(); } catch {}
+        try { idx.cancelUpdate(); } catch {}
         throw e;
       }
       this.cachedItems = null;
@@ -367,7 +384,7 @@ export class KnowledgeVectorStore {
    */
   async updateItem(id: string, newText: string, newTitle?: string, newTopic?: string): Promise<boolean> {
     await this.init();
-    const items = await this.index.listItems();
+    const items = await this.listItems();
     const existing = items.find(i => i.id === id);
 
     if (!existing) {
@@ -386,8 +403,9 @@ export class KnowledgeVectorStore {
 
     return await this.withLock(async () => {
       // Replace item in vectra by deleting and re-inserting
-      await this.index.deleteItem(id);
-      await this.index.insertItem({
+      const idx = this.getIndex();
+      await idx.deleteItem(id);
+      await idx.insertItem({
         id,
         vector,
         metadata: updatedMetadata,
@@ -401,21 +419,22 @@ export class KnowledgeVectorStore {
    */
   async clearSource(source?: string): Promise<number> {
     await this.init();
-    const items = await this.index.listItems();
+    const items = await this.listItems();
     let deletedCount = 0;
 
     return await this.withLock(async () => {
-      await this.index.beginUpdate();
+      const idx = this.getIndex();
+      await idx.beginUpdate();
       try {
         for (const item of items) {
           if (!source || source === 'all' || item.metadata.source === source) {
-            await this.index.deleteItem(item.id);
+            await idx.deleteItem(item.id);
             deletedCount++;
           }
         }
-        await this.index.endUpdate();
+        await idx.endUpdate();
       } catch (e) {
-        try { this.index.cancelUpdate(); } catch {}
+        try { idx.cancelUpdate(); } catch {}
         throw e;
       }
       this.cachedItems = null;
@@ -427,8 +446,7 @@ export class KnowledgeVectorStore {
    * Get total count of indexed items
    */
   async getCount(): Promise<number> {
-    await this.init();
-    const items = await this.index.listItems();
+    const items = await this.listItems();
     return items.length;
   }
 }
