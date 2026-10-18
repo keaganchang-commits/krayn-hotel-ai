@@ -1,19 +1,41 @@
 import path from 'path';
 import fs from 'fs';
-import { LocalIndex } from 'vectra';
 import { generateEmbedding } from '../ai/gemini';
 import { TextChunk } from './chunker';
 
 const INDEX_DIR = path.join(process.cwd(), '.knowledge_store');
 const INDEX_FILE = path.join(INDEX_DIR, 'index.json');
+const BAK_FILE = path.join(INDEX_DIR, 'index.json.bak');
+
+export interface StoredItem {
+  id: string;
+  vector?: number[];
+  norm?: number;
+  metadata?: Record<string, any>;
+  text?: string;
+  source?: TextChunk['source'];
+  title?: string;
+  timestamp?: string;
+}
+
+interface IndexFileStructure {
+  version: number;
+  metadata_config: { indexed: string[] };
+  items: StoredItem[];
+}
+
+function calcVectorNorm(vec: number[]): number {
+  let sum = 0;
+  for (let i = 0; i < vec.length; i++) sum += vec[i] * vec[i];
+  return Math.sqrt(sum) || 1;
+}
 
 // Ensure a safe index file exists on disk with atomic backup
 function ensureCleanIndexFile() {
   try {
     if (!fs.existsSync(INDEX_DIR)) {
-      fs.mkdirSync(INDEX_DIR, { recursive: true });
+      try { fs.mkdirSync(INDEX_DIR, { recursive: true }); } catch {}
     }
-    const BAK_FILE = path.join(INDEX_DIR, 'index.json.bak');
     if (!fs.existsSync(INDEX_FILE)) {
       if (fs.existsSync(BAK_FILE)) {
         try {
@@ -24,7 +46,7 @@ function ensureCleanIndexFile() {
         } catch {}
       }
       const emptyIndex = JSON.stringify({ version: 1, metadata_config: { indexed: [] }, items: [] });
-      fs.writeFileSync(INDEX_FILE, emptyIndex, 'utf8');
+      try { fs.writeFileSync(INDEX_FILE, emptyIndex, 'utf8'); } catch {}
       return;
     }
 
@@ -54,25 +76,48 @@ function ensureCleanIndexFile() {
 }
 
 export class KnowledgeVectorStore {
-  private index: LocalIndex | null = null;
   private isInitialized = false;
   private writeMutex: Promise<any> = Promise.resolve();
-  private cachedItems: any[] | null = null;
+  private cachedItems: StoredItem[] | null = null;
   private lastCacheTime = 0;
 
   constructor() {
     ensureCleanIndexFile();
   }
 
-  private getIndex(): LocalIndex {
-    if (!this.index) {
-      this.index = new LocalIndex(INDEX_DIR);
-    }
-    return this.index;
-  }
-
   private invalidateCache() {
     this.cachedItems = null;
+  }
+
+  private readDiskFile(): IndexFileStructure {
+    ensureCleanIndexFile();
+    if (fs.existsSync(INDEX_FILE)) {
+      try {
+        const raw = fs.readFileSync(INDEX_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.items)) {
+          return {
+            version: parsed.version || 1,
+            metadata_config: parsed.metadata_config || { indexed: [] },
+            items: parsed.items.filter(Boolean),
+          };
+        }
+      } catch (err) {
+        console.warn('[KnowledgeVectorStore] readDiskFile parse error:', err);
+      }
+    }
+    return { version: 1, metadata_config: { indexed: [] }, items: [] };
+  }
+
+  private writeDiskFile(data: IndexFileStructure) {
+    try {
+      const content = JSON.stringify(data);
+      fs.writeFileSync(INDEX_FILE, content, 'utf8');
+      // Create backup snapshot
+      try { fs.writeFileSync(BAK_FILE, content, 'utf8'); } catch {}
+    } catch (err) {
+      console.warn('[KnowledgeVectorStore] writeDiskFile warning:', err);
+    }
   }
 
   // Linearize write operations to prevent concurrent file corruption
@@ -88,28 +133,9 @@ export class KnowledgeVectorStore {
   }
 
   async init() {
-    if (this.isInitialized) {
-      ensureCleanIndexFile();
-      return;
-    }
-    try {
-      ensureCleanIndexFile();
-      const idx = this.getIndex();
-      if (!(await idx.isIndexCreated())) {
-        await idx.createIndex();
-      }
-      this.isInitialized = true;
-    } catch (err) {
-      console.error('[KnowledgeVectorStore] Init error:', err);
-      ensureCleanIndexFile();
-      try {
-        const idx = this.getIndex();
-        await idx.createIndex();
-        this.isInitialized = true;
-      } catch (e) {
-        console.error('[KnowledgeVectorStore] Fatal index create error:', e);
-      }
-    }
+    if (this.isInitialized) return;
+    ensureCleanIndexFile();
+    this.isInitialized = true;
   }
 
   /**
@@ -128,13 +154,14 @@ export class KnowledgeVectorStore {
     await this.init();
 
     // 1. Generate embeddings in parallel
-    const itemsToInsert = await Promise.all(
+    const itemsToInsert: StoredItem[] = await Promise.all(
       chunks.map(async chunk => {
         const vector = await generateEmbedding(chunk.text);
         const id = `chunk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         return {
           id,
           vector,
+          norm: calcVectorNorm(vector),
           metadata: {
             text: chunk.text,
             source: chunk.source,
@@ -148,17 +175,9 @@ export class KnowledgeVectorStore {
 
     // 2. Perform batch insertion within a single lock and single disk flush
     return await this.withLock(async () => {
-      const idx = this.getIndex();
-      await idx.beginUpdate();
-      try {
-        for (const item of itemsToInsert) {
-          await idx.insertItem(item);
-        }
-        await idx.endUpdate();
-      } catch (e) {
-        try { idx.cancelUpdate(); } catch {}
-        throw e;
-      }
+      const current = this.readDiskFile();
+      current.items.push(...itemsToInsert);
+      this.writeDiskFile(current);
       return itemsToInsert.map(i => i.id);
     });
   }
@@ -170,32 +189,11 @@ export class KnowledgeVectorStore {
     await this.init();
     const queryVector = await generateEmbedding(queryText);
     const items = await this.listItems();
-
-    // Helper to calculate vector norm
-    const calcNorm = (vec: number[]) => {
-      let sum = 0;
-      for (let i = 0; i < vec.length; i++) sum += vec[i] * vec[i];
-      return Math.sqrt(sum) || 1;
-    };
-    const queryNorm = calcNorm(queryVector);
+    const queryNorm = calcVectorNorm(queryVector);
 
     // Get raw items with vectors from local index or direct disk file
-    let rawItems: any[] = [];
-    try {
-      if (fs.existsSync(INDEX_FILE)) {
-        const parsed = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'));
-        if (Array.isArray(parsed?.items)) rawItems = parsed.items;
-      }
-    } catch {}
-
-    if (rawItems.length === 0) {
-      try {
-        rawItems = await this.getIndex().listItems();
-      } catch {
-        rawItems = [];
-      }
-    }
-    const rawById = new Map<string, any>(rawItems.map(r => [r.id, r]));
+    const diskData = this.readDiskFile();
+    const rawById = new Map<string, StoredItem>(diskData.items.map(r => [r.id, r]));
 
     const terms = queryText
       .toLowerCase()
@@ -215,7 +213,7 @@ export class KnowledgeVectorStore {
           for (let i = 0; i < len; i++) {
             dot += queryVector[i] * itemVec[i];
           }
-          const itemNorm = raw.norm || calcNorm(itemVec);
+          const itemNorm = raw.norm || calcVectorNorm(itemVec);
           sim = dot / (queryNorm * itemNorm);
           if (isNaN(sim)) sim = 0;
         }
@@ -285,31 +283,10 @@ export class KnowledgeVectorStore {
     const now = Date.now();
     let rawItems = this.cachedItems;
 
-    // Use memory cache if available and younger than 10 seconds, avoiding 28MB JSON disk reads
+    // Use memory cache if available and younger than 10 seconds
     if (!rawItems || now - this.lastCacheTime > 10000) {
-      // 1. Direct fast read from INDEX_FILE JSON (zero dependency, 100% reliable in serverless)
-      try {
-        if (fs.existsSync(INDEX_FILE)) {
-          const rawContent = fs.readFileSync(INDEX_FILE, 'utf8');
-          const parsed = JSON.parse(rawContent);
-          if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
-            rawItems = parsed.items;
-          }
-        }
-      } catch (directErr) {
-        console.warn('[KnowledgeVectorStore] Direct JSON read warning:', directErr);
-      }
-
-      // 2. If direct file read did not yield items, try Vectra index
-      if (!rawItems || rawItems.length === 0) {
-        try {
-          await this.init();
-          rawItems = await this.index.listItems();
-        } catch (err) {
-          console.warn('[KnowledgeVectorStore] Vectra listItems fallback error:', err);
-        }
-      }
-
+      const diskData = this.readDiskFile();
+      rawItems = diskData.items;
       this.cachedItems = rawItems;
       this.lastCacheTime = now;
     }
@@ -348,8 +325,9 @@ export class KnowledgeVectorStore {
   async deleteItem(id: string): Promise<boolean> {
     await this.init();
     return await this.withLock(async () => {
-      await this.getIndex().deleteItem(id);
-      this.cachedItems = null;
+      const current = this.readDiskFile();
+      current.items = current.items.filter(i => i.id !== id);
+      this.writeDiskFile(current);
       return true;
     });
   }
@@ -361,20 +339,10 @@ export class KnowledgeVectorStore {
     if (!ids || ids.length === 0) return true;
     await this.init();
     return await this.withLock(async () => {
-      const idx = this.getIndex();
-      await idx.beginUpdate();
-      try {
-        for (const id of ids) {
-          try {
-            await idx.deleteItem(id);
-          } catch {}
-        }
-        await idx.endUpdate();
-      } catch (e) {
-        try { idx.cancelUpdate(); } catch {}
-        throw e;
-      }
-      this.cachedItems = null;
+      const current = this.readDiskFile();
+      const set = new Set(ids);
+      current.items = current.items.filter(i => !set.has(i.id));
+      this.writeDiskFile(current);
       return true;
     });
   }
@@ -402,14 +370,15 @@ export class KnowledgeVectorStore {
     };
 
     return await this.withLock(async () => {
-      // Replace item in vectra by deleting and re-inserting
-      const idx = this.getIndex();
-      await idx.deleteItem(id);
-      await idx.insertItem({
+      const current = this.readDiskFile();
+      current.items = current.items.filter(i => i.id !== id);
+      current.items.push({
         id,
         vector,
+        norm: calcVectorNorm(vector),
         metadata: updatedMetadata,
       });
+      this.writeDiskFile(current);
       return true;
     });
   }
@@ -419,25 +388,18 @@ export class KnowledgeVectorStore {
    */
   async clearSource(source?: string): Promise<number> {
     await this.init();
-    const items = await this.listItems();
-    let deletedCount = 0;
-
     return await this.withLock(async () => {
-      const idx = this.getIndex();
-      await idx.beginUpdate();
-      try {
-        for (const item of items) {
-          if (!source || source === 'all' || item.metadata.source === source) {
-            await idx.deleteItem(item.id);
-            deletedCount++;
-          }
-        }
-        await idx.endUpdate();
-      } catch (e) {
-        try { idx.cancelUpdate(); } catch {}
-        throw e;
+      const current = this.readDiskFile();
+      let deletedCount = 0;
+      if (!source || source === 'all') {
+        deletedCount = current.items.length;
+        current.items = [];
+      } else {
+        const initial = current.items.length;
+        current.items = current.items.filter(i => i.metadata?.source !== source && i.source !== source);
+        deletedCount = initial - current.items.length;
       }
-      this.cachedItems = null;
+      this.writeDiskFile(current);
       return deletedCount;
     });
   }
