@@ -9,37 +9,44 @@ export interface AutoReplyConfig {
   turboModeUntil?: number | null; // Unix timestamp in ms when 3-sec demo turbo mode expires
 }
 
+// In-memory fallback state for read-only serverless environments
+let memoryConfig: AutoReplyConfig = {
+  enabled: true,
+  enabledAt: Math.floor(Date.now() / 1000),
+  turboModeUntil: null,
+};
+
 /**
  * Get the current Auto-Reply configuration
  */
 export function getAutoReplyConfig(): AutoReplyConfig {
-  if (fs.existsSync(CONFIG_FILE)) {
-    try {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
       const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      return {
+      memoryConfig = {
         enabled: !!data.enabled,
-        enabledAt: data.enabledAt ?? null,
+        enabledAt: data.enabledAt ?? memoryConfig.enabledAt,
         turboModeUntil: data.turboModeUntil ?? null,
       };
-    } catch (e) {
-      // ignore JSON parse error
+      return memoryConfig;
     }
+  } catch (e) {
+    // ignore read error
   }
 
-  // Default state: ON (enabled) with enabledAt set to current time
-  const defaultConfig: AutoReplyConfig = {
-    enabled: true,
-    enabledAt: Math.floor(Date.now() / 1000),
-  };
-  saveAutoReplyConfig(defaultConfig);
-  return defaultConfig;
+  return memoryConfig;
 }
 
 /**
- * Save Auto-Reply configuration
+ * Save Auto-Reply configuration with graceful in-memory fallback on read-only systems
  */
 export function saveAutoReplyConfig(config: AutoReplyConfig) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  memoryConfig = { ...config };
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  } catch (err) {
+    // In serverless environments, file writing may fail silently; memoryConfig preserves the state
+  }
 }
 
 /**
@@ -51,8 +58,8 @@ export function setAutoReplyState(enabled: boolean): AutoReplyConfig {
   const nowInSeconds = Math.floor(Date.now() / 1000);
 
   const updated: AutoReplyConfig = {
+    ...current,
     enabled,
-    // When turning ON, update enabledAt to current time so old emails are ignored!
     enabledAt: enabled ? nowInSeconds : current.enabledAt,
   };
 
