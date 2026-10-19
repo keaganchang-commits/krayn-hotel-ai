@@ -201,13 +201,14 @@ ACTIVE QUESTIONS FROM CLARIFICATIONS HUB:
 ${gapsList}
 
 RULES FOR GUIDING & ASKING QUESTIONS:
-1. PROMPT USING CLARIFICATIONS QUESTIONS:
-   - Ask questions directly from the ACTIVE QUESTIONS FROM CLARIFICATIONS HUB list above.
-   - Ask 1 clear question at a time. Never dump multiple questions.
-2. HANDLING GREETING OR PROMPT REQUESTS:
-   - When the user starts or asks "prompt me", "guide me", "what's next", or "ask me a question", immediately ask the first unanswered question from the Clarifications Hub.
-3. INTELLIGENT PROBING ON CRITICAL DETAILS:
-   - When the manager answers, if an essential sub-detail is missing (e.g. specific hours, prices, or conditions), ask 1 brief follow-up before moving to the next clarification question.
+1. ACKNOWLEDGE USER INPUT & DON'T JUMP ABRUPTLY:
+   - When the user states a policy, rule, or piece of information, or goes straight ahead to say something: acknowledge it simply with "Okay, noted." and ask if there is anything else they would like to add (e.g. "Okay, noted. Is there anything else you'd like to add?").
+   - DO NOT abruptly jump into an unrelated question or the next clarification question immediately after the user shares a fact! Give them space to finish or share more.
+2. PROMPT ONLY WHEN REQUESTED OR READY:
+   - If the user explicitly asks to be prompted (e.g. "prompt me", "guide me", "what's next", "ask me a question") OR replies "no, that's all" / "nothing else", then ask 1 clear question from the ACTIVE QUESTIONS FROM CLARIFICATIONS HUB list.
+   - Ask 1 question at a time. Never dump multiple questions.
+3. INTELLIGENT PROBING ON CRITICAL DETAILS ONLY WHEN NECESSARY:
+   - Only if a crucial sub-detail is clearly missing from the exact policy they just mentioned (e.g. they say parking is available but didn't mention if it's free or paid), you may briefly ask: "Okay, noted. Is that complimentary or is there a fee?"
 4. NEVER ASK ABOUT FACTS YOU ALREADY HAVE:
    - You have real-time access to HOTEL KNOWLEDGE. If an item or policy is already recorded, never ask about it.
 5. STRICT GROUNDING: State only facts in HOTEL KNOWLEDGE.
@@ -667,10 +668,10 @@ RULES FOR GUIDING & ASKING QUESTIONS:
 
     // Natural greetings: always greet the person first when starting a fresh session
     const greetingOptions = [
-      'Say strictly and concisely: "Hi! Would you like me to prompt you on missing policies, or do you have something to add?"',
-      'Say strictly and concisely: "Hello! Should we review missing hotel policies together, or is there something specific you would like to add?"',
-      'Say strictly and concisely: "Hi there! Would you like me to guide you through missing details, or do you have rules to update?"',
-      'Say strictly and concisely: "Hello! Shall I ask about our missing hotel policies, or feel free to tell me what you want to add."',
+      'Say strictly and concisely: "Hi! Would you like me to prompt you, or do you have something to say?"',
+      'Say strictly and concisely: "Hello! Should I prompt you with questions, or is there something you want to add?"',
+      'Say strictly and concisely: "Hi there! Would you like me to guide you with questions, or feel free to tell me anything."',
+      'Say strictly and concisely: "Hello! Would you like me to prompt you on hotel policies, or do you want to say something first?"',
     ];
     const greetingPrompt = greetingOptions[Math.floor(Math.random() * greetingOptions.length)];
 

@@ -75,13 +75,12 @@ User statement:
 "${cleanInput}"
 
 RULES:
-1. FOCUS ON ONE AREA IN-DEPTH: Cover missing gaps in the current operational area (e.g. Rooms & Arrival first, then Dining, then Parking, then Special Policies).
-2. INTELLIGENT PROBING ON CRITICAL DETAILS: If the manager states a policy but a crucial detail that guests frequently ask about is missing (such as fees, hours, deposits, or restrictions), ask 1 concise follow-up probe. (e.g. "Got it. Is luggage storage free of charge, or is there a fee?").
-3. CONFIRMATION BEFORE AREA TRANSITION: When all details for an area are answered, ask for confirmation before switching: "We have all room details on file. Ready to move to Dining, or anything else to add on Rooms?"
-4. ULTRA-CLEAR & HIGHLY SPECIFIC QUESTIONS: Never ask open-ended or vague questions. Specify the exact detail needed so the manager can answer immediately in just 1-3 words.
-5. NEVER ASK ABOUT INFO YOU ALREADY HAVE: If an item, rule, hour, price, or policy is already recorded in HOTEL KNOWLEDGE, NEVER ask the user about it.
-6. STRICT GROUNDING: State only facts in HOTEL KNOWLEDGE. If asked about something missing, say: "We don't have that on file yet. Could you share the details?"
-7. MAX 1 SHORT SENTENCE (under 16 words). Plain conversational English.`;
+1. ACKNOWLEDGE USER INPUT & DON'T JUMP ABRUPTLY: When the manager states a policy, rule, or piece of information, or goes straight ahead to say something: acknowledge it simply with "Okay, noted." and ask if there is anything else they would like to add (e.g. "Okay, noted. Is there anything else you'd like to add?"). DO NOT abruptly jump into an unrelated question or the next topic!
+2. PROMPT ONLY WHEN REQUESTED OR READY: If the user asks to be prompted (e.g. "prompt me", "guide me", "ask me a question") or confirms "no, nothing else", then ask 1 clear question on missing hotel gaps.
+3. INTELLIGENT PROBING ON CRITICAL DETAILS ONLY WHEN NECESSARY: Only if a crucial sub-detail is missing from the exact policy they just mentioned (such as fees, hours, or restrictions), ask 1 concise follow-up probe (e.g. "Okay, noted. Is that complimentary or is there a fee?").
+4. NEVER ASK ABOUT INFO YOU ALREADY HAVE: If an item, rule, hour, price, or policy is already recorded in HOTEL KNOWLEDGE, NEVER ask the user about it.
+5. STRICT GROUNDING: State only facts in HOTEL KNOWLEDGE. If asked about something missing, say: "We don't have that on file yet. Could you share the details?"
+6. MAX 1 SHORT SENTENCE (under 16 words). Plain conversational English.`;
 
       const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
 
