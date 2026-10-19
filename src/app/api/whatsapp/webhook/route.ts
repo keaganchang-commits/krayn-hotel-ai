@@ -266,6 +266,27 @@ Reply directly to the customer:`;
 
     // Return TwiML XML response with MediaUrl if PDF attachment is generated
     const twimlBody = createTwilioXml(replyText, mediaUrl);
+
+    // Also proactively send via Twilio REST API to ensure delivery in trial / custom mode
+    try {
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      if (accountSid && authToken && from && to) {
+        const twilio = (await import('twilio')).default;
+        const client = twilio(accountSid, authToken);
+        await client.messages.create({
+          from: to,
+          to: from,
+          body: replyText,
+          ...(mediaUrl ? { mediaUrl: [mediaUrl] } : {}),
+        }).catch(err => {
+          console.warn('[WhatsApp Webhook REST Outbound Warning]:', err?.message || err);
+        });
+      }
+    } catch (e) {
+      console.warn('[WhatsApp Webhook REST Client Error]:', e);
+    }
+
     return new NextResponse(twimlBody, {
       status: 200,
       headers: {
