@@ -290,14 +290,14 @@ Reply directly to the customer:`;
     return new NextResponse(twimlBody, {
       status: 200,
       headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
+        'Content-Type': 'text/xml',
       },
     });
   } catch (error: any) {
     console.error('[WhatsApp Webhook Error]:', error);
     return new NextResponse(createTwilioXml(`Error: ${error?.message || 'Processing error'}`), {
       status: 200,
-      headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+      headers: { 'Content-Type': 'text/xml' },
     });
   }
 }
@@ -315,17 +315,21 @@ export async function GET() {
 }
 
 function createTwilioXml(message: string, mediaUrl?: string): string {
-  const escaped = message
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  const mediaBlock = mediaUrl ? `\n    <Media>${mediaUrl}</Media>` : '';
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Message>
-    <Body>${escaped}</Body>${mediaBlock}
-  </Message>
-</Response>`;
+  try {
+    const twilio = require('twilio');
+    const response = new twilio.twiml.MessagingResponse();
+    const msg = response.message();
+    msg.body(message);
+    if (mediaUrl) {
+      msg.media(mediaUrl);
+    }
+    return response.toString();
+  } catch (e) {
+    const escaped = message
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const mediaBlock = mediaUrl ? `<Media>${mediaUrl}</Media>` : '';
+    return `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${escaped}</Body>${mediaBlock}</Message></Response>`;
+  }
 }
