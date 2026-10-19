@@ -27,24 +27,28 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const CHATS_FILE = path.join(DATA_DIR, 'whatsapp_chats.json');
 
 function ensureFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(CHATS_FILE)) {
-    fs.writeFileSync(CHATS_FILE, JSON.stringify([], null, 2), 'utf8');
-  }
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+    }
+    if (!fs.existsSync(CHATS_FILE)) {
+      try { fs.writeFileSync(CHATS_FILE, JSON.stringify([], null, 2), 'utf8'); } catch {}
+    }
+  } catch {}
 }
 
 export function listWhatsAppChats(): WhatsAppChat[] {
   ensureFile();
   try {
-    const raw = fs.readFileSync(CHATS_FILE, 'utf8');
-    const chats: WhatsAppChat[] = JSON.parse(raw);
-    return chats.sort((a, b) => new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime());
+    if (fs.existsSync(CHATS_FILE)) {
+      const raw = fs.readFileSync(CHATS_FILE, 'utf8');
+      const chats: WhatsAppChat[] = JSON.parse(raw);
+      return chats.sort((a, b) => new Date(b.lastTimestamp).getTime() - new Date(a.lastTimestamp).getTime());
+    }
   } catch (err) {
     console.error('Error reading whatsapp_chats.json:', err);
-    return [];
   }
+  return [];
 }
 
 export function getWhatsAppChat(phoneNumber: string): WhatsAppChat | null {
@@ -81,7 +85,11 @@ export function saveWhatsAppMessage(message: Omit<WhatsAppMessage, 'id'>): Whats
     });
   }
 
-  fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+  try {
+    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+  } catch (writeErr) {
+    console.warn('[WhatsApp Storage] Could not persist to disk (serverless read-only disk):', writeErr);
+  }
   return fullMsg;
 }
 
@@ -91,7 +99,9 @@ export function markWhatsAppChatAsRead(phoneNumber: string): boolean {
   const chat = chats.find(c => c.phoneNumber === phoneNumber);
   if (chat) {
     chat.unreadCount = 0;
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+    try {
+      fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+    } catch {}
     return true;
   }
   return false;

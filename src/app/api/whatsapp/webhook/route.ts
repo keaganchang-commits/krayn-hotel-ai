@@ -274,7 +274,7 @@ Reply directly to the customer:`;
     });
   } catch (error: any) {
     console.error('[WhatsApp Webhook Error]:', error);
-    return new NextResponse(createTwilioXml('Sorry, we encountered an issue processing your request.'), {
+    return new NextResponse(createTwilioXml(`Error: ${error?.message || 'Processing error'}`), {
       status: 200,
       headers: { 'Content-Type': 'text/xml; charset=utf-8' },
     });
