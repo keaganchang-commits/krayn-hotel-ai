@@ -34,6 +34,26 @@ function SidebarInner({
     }
   }, [pathname]);
 
+  // Autonomous Email Poller: Keeps autonomous scanning active on Vercel whenever dashboard is open
+  useEffect(() => {
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        await fetch('/api/gmail/autoreply', { method: 'POST' });
+      } catch {
+        // silent
+      }
+    }, 4000);
+
+    // Initial check on mount
+    fetch('/api/gmail/autoreply', { method: 'POST' }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const navItems = [
     { label: 'Knowledge', href: '/knowledge' },
     { label: 'Clarifications', href: '/clarifications' },
