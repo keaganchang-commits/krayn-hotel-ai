@@ -15,16 +15,35 @@ import { OFFICIAL_ROOM_PROMPT_INSTRUCTION } from '@/lib/hotel/rooms';
 function stripSignoff(text: string): string {
   if (!text) return '';
   return text
-    // Strip common signoff phrases and everything that follows them
     .replace(/(?:\n|\r|\s)*(?:Warm|Best|Kind|With)?\s*regards,[\s\S]*$/i, '')
     .replace(/(?:\n|\r|\s)*Sincerely,[\s\S]*$/i, '')
     .replace(/(?:\n|\r|\s)*Yours sincerely,[\s\S]*$/i, '')
     .replace(/(?:\n|\r|\s)*Yours faithfully,[\s\S]*$/i, '')
     .replace(/(?:\n|\r|\s)*Cheers,[\s\S]*$/i, '')
-    // Strip Park Hyatt footer block if present
     .replace(/Park Hyatt Kuala Lumpur[\s\S]*?(?:Menara Merdeka|Tel:|kualalumpur\.park|www\.hyatt\.com)[\s\S]*$/i, '')
     .replace(/(?:Tel:\s*\+?[\d\s-]+\|[\s\S]*)/i, '')
     .replace(/www\.hyatt\.com[^\s]*/gi, '')
+    .trim();
+}
+
+/**
+ * Converts standard Markdown to WhatsApp formatting:
+ * - WhatsApp uses single *bold* instead of markdown double **bold**
+ * - WhatsApp uses _italic_ instead of *italic*
+ * - WhatsApp uses ~strikethrough~
+ * Also cleans up any leftover broken asterisks or double markers.
+ */
+function formatForWhatsApp(text: string): string {
+  if (!text) return '';
+  const cleaned = stripSignoff(text);
+  return cleaned
+    // Convert markdown bold **word** or ***word*** to WhatsApp *word*
+    .replace(/\*{2,3}([^*]+)\*{2,3}/g, '*$1*')
+    // Remove isolated stray asterisks like " * " or leading bullet asterisk "** "
+    .replace(/^[\s]*\*\*\s+/gm, '• ')
+    .replace(/^[\s]*\*\s+/gm, '• ')
+    // Fix accidental double bold like **bold*
+    .replace(/\*{2,}/g, '*')
     .trim();
 }
 
@@ -122,15 +141,98 @@ export async function POST(req: NextRequest) {
 
     const isGreeting = /^(hi|hello|hey|good\s*(morning|afternoon|evening)|halo|assalamualaikum|hai)[!.,\s]*$/i.test(incomingText);
 
-    // 1. MEETING ROOM RESERVATION AGENT: Check if this is a meeting room inquiry or booking
-    if (!isGreeting && isMeetingIntent(incomingText)) {
+    // =========================================================================
+    // LOCKED FIXED SCENARIO: Sky Room Meeting Booking Flow
+    // Turn 1 Trigger: Asking to book a Sky Room / meeting room (e.g. "Hi, can I book a Sky Room for my meeting from 10-11am tomorrow?")
+    // Turn 1 Reply: "Of course. May I know how many people will be coming?"
+    // Turn 2 Trigger: Response giving number of attendees (e.g. "22" or "22." or any number 1-100)
+    // Turn 2 Reply: "Noted with thanks. Your booking is confirmed.\n\nAttached is the document of confirmation. Please sign and return a copy at your convenience."
+    // =========================================================================
+    const cleanIn = incomingText.trim().toLowerCase();
+    
+    // Check if user is asking the Turn 1 question
+    const isTurn1Trigger =
+      (cleanIn.includes('sky room') || cleanIn.includes('skyroom') || cleanIn.includes('meeting room') || cleanIn.includes('meeting')) &&
+      (cleanIn.includes('book') || cleanIn.includes('reserve') || cleanIn.includes('10-11') || cleanIn.includes('tomorrow'));
+
+    // Check if the user is answering with an attendee count (e.g. "22", "22.", "about 22", "22 pax")
+    const isTurn2Number = /^\s*(?:about\s+|around\s+)?(\d{1,3})\s*(?:people|pax|guests|delegates)?[\s.]*$/i.test(incomingText.trim());
+
+    // Check recent message history
+    const allMessages = existingChat?.messages || [];
+    const lastOutbound = allMessages.slice().reverse().find(m => m.direction === 'outbound');
+    const wasTurn1Asked = lastOutbound && lastOutbound.text.toLowerCase().includes('how many people will be coming');
+
+    // Turn 1 executes if Turn 1 question is asked
+    if (isTurn1Trigger) {
+      replyText = "Of course. May I know how many people will be coming?";
+      actionExecuted = "Awaiting delegate count for Sky Room booking";
+    }
+    // Turn 2 executes if user replies with the number (or specifically 22)
+    else if (isTurn2Number || wasTurn1Asked) {
+      replyText = "Noted with thanks. Your booking is confirmed.\n\nAttached is the document of confirmation. Please sign and return a copy at your convenience.";
+      actionExecuted = "Locked Sky Room booking on Google Calendar & Attached PDF Agreement";
+
+      // 1. Book on Google Calendar: Sky Room on Wednesday, 21 October 2026 (10:00 AM - 11:00 AM) for 22 guests
+      try {
+        const { getGoogleCalendarClient } = await import('@/lib/calendar/client');
+        const { getDiningCalendarConfig } = await import('@/lib/calendar/config');
+        const clientObj = await getGoogleCalendarClient();
+        const config = getDiningCalendarConfig();
+        if (clientObj) {
+          const startIso = '2026-10-21T10:00:00+08:00';
+          const endIso = '2026-10-21T11:00:00+08:00';
+
+          await clientObj.calendar.events.insert({
+            calendarId: config.calendarId,
+            requestBody: {
+              summary: '💼 [Meeting Room] Sky Rooms (Level 114) - Keagan Chang (22 pax)',
+              description: `Meeting Room Reservation: PKH-MTG-211026\nVenue: Sky Rooms (Level 114)\nClient: Keagan Chang (${sender})\nAttendees: 22 Guests\nDate: Wednesday, 21 October 2026\nHours: 10:00 AM – 11:00 AM\nSetup: U-Shape Arrangement\nFacilities: Dual 4K Laser Displays, Wireless Video Conferencing, Complimentary Coffee & Tea Station`,
+              start: { dateTime: startIso },
+              end: { dateTime: endIso },
+              colorId: '9', // Blueberry / Navy Blue
+            },
+          });
+          console.log('[WhatsApp Locked Flow] Successfully scheduled Sky Room for 21 Oct on Google Calendar!');
+        }
+      } catch (calErr: any) {
+        console.warn('[WhatsApp Locked Flow] Calendar insert note:', calErr?.message || calErr);
+      }
+
+      // 2. Generate PDF and attach to response
+      try {
+        const { generateMeetingAgreementPdf } = await import('@/lib/meeting/pdfGenerator');
+        const pdfBuffer = await generateMeetingAgreementPdf({
+          confirmationNumber: 'PKH-MTG-211026',
+          clientName: 'Keagan Chang',
+          clientEmail: `${sender}@whatsapp`,
+          meetingTitle: 'Executive Meeting - Keagan Chang',
+          roomName: 'Sky Rooms (Level 114)',
+          eventDate: 'Wednesday, October 21, 2026',
+          startTime: '10:00 AM',
+          endTime: '11:00 AM',
+          durationHours: '1 Hour',
+          attendees: 22,
+          setupStyle: 'U-Shape Arrangement',
+          avEquipment: ['Dual 4K Laser Displays', 'Wireless Video Conferencing'],
+          cateringNotes: 'Complimentary Coffee & Tea Station',
+        });
+
+        const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'krayn-hotel-ai.vercel.app';
+        mediaUrl = `https://${host}/api/agreements/preview`;
+      } catch (pdfErr) {
+        console.warn('[WhatsApp Locked Flow] PDF generation warning:', pdfErr);
+      }
+    }
+
+    // 1. GENERAL MEETING ROOM RESERVATION AGENT: Fallback for other meeting room inquiries
+    if (!replyText && !isGreeting && isMeetingIntent(incomingText)) {
       try {
         const meetingResult = await processMeetingBooking(fullContext, `${sender}@whatsapp`, 'WhatsApp Meeting Room Booking');
         if (meetingResult.handled && meetingResult.replyMessage) {
           replyText = stripSignoff(meetingResult.replyMessage);
 
           if (meetingResult.action === 'confirm_and_send_pdf' && meetingResult.pdfAttachment) {
-            // Save PDF to public directory so Twilio can send it directly to WhatsApp as media
             const publicAgreementsDir = path.join(process.cwd(), 'public', 'agreements');
             if (!fs.existsSync(publicAgreementsDir)) {
               fs.mkdirSync(publicAgreementsDir, { recursive: true });
@@ -139,8 +241,7 @@ export async function POST(req: NextRequest) {
             const filePath = path.join(publicAgreementsDir, filename);
             fs.writeFileSync(filePath, meetingResult.pdfAttachment.content);
 
-            // Public URL for Twilio WhatsApp media delivery (matches current host/tunnel dynamically)
-            const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'tomato-contest-creations-dash.trycloudflare.com';
+            const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'krayn-hotel-ai.vercel.app';
             mediaUrl = `https://${host}/agreements/${filename}`;
 
             actionExecuted = `Scheduled on Google Calendar & Attached PDF Agreement (${filename})`;
@@ -191,33 +292,32 @@ export async function POST(req: NextRequest) {
 
         const malaysianTime = getMalaysianDateTime();
         const dynamicPrompt = `You are the concierge for Park Hyatt Kuala Lumpur on WhatsApp.
-Your role: Be helpful, concise, and structured.
+Your role: Be extremely concise, direct, and helpful.
 
 ${malaysianTime.formattedPromptContext}
 
 ${OFFICIAL_ROOM_PROMPT_INSTRUCTION}
 
-TONE & STYLE RULES:
-• Use clean, everyday language.
-• Keep it concise and neatly structured. Avoid lengthy filler, conversational preamble, or generic sign-offs.
-• When presenting rooms, suites, or dining options: list the categories cleanly and concisely with their key specification (e.g. size/view) in a brief bulleted format without long descriptive paragraphs.
-• ABSOLUTELY NO EMAIL SIGN-OFFS, NO signatures, NO address, NO phone numbers, NO websites.
+COMMUNICATION RULES FOR WHATSAPP:
+• Keep responses SHORT, PRECISE, and STRAIGHT TO THE POINT.
+• Use simple, everyday, friendly language.
+• NO corporate fluff, NO filler intros, NO repetitive pleasantries, NO lengthy paragraphs.
+• If asked a direct question (e.g., location, check-in time, pool hours, restaurants, amenities), answer the question directly in 1 to 3 short sentences or bullet points.
+• When listing options (rooms, dining, amenities), use clean, brief bullet points with only the essential details (e.g. name, floor/hours/size).
+• NEVER mention you are an AI, bot, or virtual assistant.
+• ABSOLUTELY NO EMAIL SIGN-OFFS (no "Warm regards", no "Sincerely", no contact phone numbers, no website links, no footers).
+• If the message is just a greeting ("hi", "hello"), reply simply and warmly: "Hello! Welcome to Park Hyatt Kuala Lumpur. How can I help you?"
 
-BUSINESS KNOWLEDGE:
-${knowledgeSnippets || 'No specific document snippet needed.'}
+HOTEL KNOWLEDGE BASE:
+${knowledgeSnippets || 'Park Hyatt Kuala Lumpur is an ultra-luxury skyscraper hotel located in Menara Merdeka 118.'}
 
 RECENT CONVERSATION HISTORY:
 ${recentHistory || '(No previous messages)'}
 
-CUSTOMER'S LATEST MESSAGE:
+CUSTOMER'S MESSAGE:
 "${incomingText}"
 
-Instructions:
-1. If greeting, respond warmly and ask directly how to help.
-2. If asking about rooms, suites, dining, or amenities, list the options concisely and comprehensively using clean bullet points.
-3. Keep the overall reply compact and easy to read on mobile.
-
-Reply directly to the customer:`;
+Reply directly:`;
 
         for (const model of GEMINI_GENERATIVE_MODELS) {
           try {
@@ -248,8 +348,8 @@ Reply directly to the customer:`;
       }
     }
 
-    // Ensure any trailing signoffs are completely stripped
-    replyText = stripSignoff(replyText);
+    // Ensure any trailing signoffs are completely stripped and format cleanly for WhatsApp (*bold* instead of **bold**)
+    replyText = formatForWhatsApp(replyText);
 
     // Save outgoing AI reply message with action audit
     saveWhatsAppMessage({

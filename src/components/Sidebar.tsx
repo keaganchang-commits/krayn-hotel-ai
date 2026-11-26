@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ChevronDown, GraduationCap, MessageSquare, Mic } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 
 function SidebarInner({
   syncedEmailsCount = 4006,
@@ -26,6 +26,7 @@ function SidebarInner({
 
   const isChatActive = pathname === '/chat';
   const [isChatDropdownOpen, setIsChatDropdownOpen] = useState(isChatActive);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Auto-expand dropdown when navigating to /chat
   useEffect(() => {
@@ -33,6 +34,23 @@ function SidebarInner({
       setIsChatDropdownOpen(true);
     }
   }, [pathname]);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname, searchParams]);
+
+  // Prevent background body scroll when mobile sidebar drawer is open
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
 
   // Autonomous Email Poller: Keeps autonomous scanning active on Vercel whenever dashboard is open
   useEffect(() => {
@@ -62,17 +80,28 @@ function SidebarInner({
     { label: 'Voice Training', href: '/voice' },
   ];
 
-  return (
-    <aside className="w-40 md:w-44 bg-white border-r border-[#E5E5E7] flex flex-col justify-between p-2.5 md:p-3 z-10 shrink-0 transition-all">
+  const sidebarContent = (
+    <div className="flex flex-col justify-between h-full p-2.5 md:p-3">
       <div>
-        {/* Logo & Brand - Centered, Crisp Apple proportions with tighter top spacing */}
-        <Link href="/knowledge" className="flex items-center justify-center py-1.5 px-1 mb-2">
-          <img
-            src="/logo.png"
-            alt="Krayn"
-            className="w-auto h-8 md:h-9 max-w-[130px] object-contain"
-          />
-        </Link>
+        {/* Top bar on mobile (with close button) / Centered Logo on Desktop */}
+        <div className="flex items-center justify-between md:justify-center py-1.5 px-1 mb-2">
+          <Link href="/knowledge" className="flex items-center justify-center">
+            <img
+              src="/logo.png"
+              alt="Krayn"
+              className="w-auto h-8 md:h-9 max-w-[130px] object-contain"
+            />
+          </Link>
+          {/* Close button on mobile drawer */}
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(false)}
+            className="md:hidden p-1.5 rounded-lg text-gray-500 hover:text-black hover:bg-gray-100 transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
         {/* Navigation Items */}
         <nav className="space-y-0.5">
@@ -94,7 +123,7 @@ function SidebarInner({
             );
           })}
 
-          {/* AI Chat Item with Dropdown (swapped above Settings) */}
+          {/* AI Chat Item with Dropdown */}
           <div className="pt-0.5">
             <button
               type="button"
@@ -169,7 +198,46 @@ function SidebarInner({
           <span className="truncate">Settings</span>
         </Link>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Floating Hamburger Button (Apple style pill / circular blur button) */}
+      <div className="md:hidden fixed top-3 left-3 z-40">
+        <button
+          type="button"
+          onClick={() => setIsMobileOpen(true)}
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-white/95 backdrop-blur-md border border-[#E5E5E7] shadow-sm text-gray-700 hover:text-black active:scale-95 transition-all"
+          aria-label="Open sidebar"
+        >
+          <Menu className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Mobile Backdrop Overlay */}
+      {isMobileOpen && (
+        <div
+          onClick={() => setIsMobileOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/25 backdrop-blur-[2px] z-50 transition-opacity animate-in fade-in duration-200"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile Slide-out Drawer */}
+      <div
+        className={`md:hidden fixed inset-y-0 left-0 w-64 max-w-[80vw] bg-white z-50 shadow-2xl border-r border-[#E5E5E7] transform transition-transform duration-300 ease-out flex flex-col ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {sidebarContent}
+      </div>
+
+      {/* Desktop Persistent Sidebar (unchanged on md and up) */}
+      <aside className="hidden md:flex w-40 md:w-44 bg-white border-r border-[#E5E5E7] flex-col justify-between z-10 shrink-0 transition-all">
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 

@@ -4,15 +4,15 @@ import { generateMeetingAgreementPdf } from '@/lib/meeting/pdfGenerator';
 export async function GET() {
   try {
     const pdfBuffer = await generateMeetingAgreementPdf({
-      confirmationNumber: 'PKH-MTG-221026',
+      confirmationNumber: 'PKH-MTG-211026',
       clientName: 'Keagan Chang',
       clientEmail: 'keaganchang@gmail.com',
-      meetingTitle: 'Executive Business Conference - Keagan Chang',
+      meetingTitle: 'Executive Business Meeting - Keagan Chang',
       roomName: 'Sky Rooms (Level 114)',
-      eventDate: 'Thursday, October 22, 2026',
+      eventDate: 'Wednesday, October 21, 2026',
       startTime: '10:00 AM',
-      endTime: '12:00 PM',
-      durationHours: '2 Hours',
+      endTime: '11:00 AM',
+      durationHours: '1 Hour',
       attendees: 22,
       setupStyle: 'U-Shape Arrangement',
       avEquipment: ['Dual 4K Laser Displays', 'Wireless Video Conferencing'],

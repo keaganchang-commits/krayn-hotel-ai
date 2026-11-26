@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/gmail/autoreply",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
